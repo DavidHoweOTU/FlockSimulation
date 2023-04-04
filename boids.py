@@ -33,16 +33,21 @@ ALIGNMENT = 0.1
 SYS_HEIGHT  = 480
 SYS_WIDTH   = 640 * 2
 
-OBJECTS = np.matrix([[50, 50]]) #object/obstacle can add more if needed
+OBJECTS = np.array([[50, 50]]) #object/obstacle can add more if needed
 SPEED_LIMIT = 10
 ######################
 
 #unsure about this change if needed
 class Obstacles(pygame.sprite.Sprite):
     def __init__(self, objects):
-        self.image = pygame.Surface(objects)
+        pygame.sprite.Sprite.__init__(self)
+        #self.image = pygame.Surface(objects)
+        self.image = pygame.Surface([objects[0]*2, objects[0]*2])
         self.image.fill(BACKGROUND)
-        pygame.draw.line(self.image, BLUE, objects, objects)
+        #pygame.draw.line(self.screen, BLUE, (objects[0], objects[1]), (objects[0]+10, objects[1]+10), 10)
+        pygame.draw.circle(self.image, BLUE, (objects[0], objects[0]), objects[0], objects[0])
+        self.rect = self.image.get_rect()
+        self.r = objects[0]
 
 
 
@@ -148,11 +153,10 @@ class Boid(pygame.sprite.Sprite):
         size = np.shape(OBJECTS)
         for columns in range(size[0]):
             #checks if x is too close to the objects x value and if it is reverse its direction
-            if abs(self.x - OBJECTS[columns][0]) < MIN_DISTANCE:
+            if self.x < abs(BORDER_MARGIN + OBJECTS[columns][0]) and self.y < abs(OBJECTS[columns][0] - BORDER_MARGIN):
                 self.speed_x = 0 - self.speed_x
-            #checks if y is too close to the objects y value and if it is reverse its direction
-            if abs(self.y - OBJECTS[columns][1]) < MIN_DISTANCE:
                 self.speed_y = 0 - self.speed_y
+            #checks if y is too close to the objects y value and if it is reverse its direction
 
 
 
@@ -163,7 +167,7 @@ class Boid(pygame.sprite.Sprite):
         self.separation(boids)
         self.alignment(boids)
         self.boundaries()
-#         self.avoidObject()
+        #self.avoidObject()
         self.speedlimit()
         
         # Move boid
@@ -189,8 +193,9 @@ class System:
         self.objects.add(new_boid)
 
     #remove if needed
-    def add_obstacle(self, object):
-        obstacle = Obstacles(object)
+    def add_obstacle(self, wall):
+        obstacle = Obstacles(wall)
+        self.objects.add(obstacle)
         
     def update_sys(self):
         for boid in self.boids:
@@ -252,8 +257,8 @@ def main():
 
     # Generate obstacles, remove if needed
     size = np.shape(OBJECTS)
-#     for x in range(size[0]):
-#         system.add_obstacle(OBJECTS[x])
+    for x in range(size[0]):
+        system.add_obstacle(OBJECTS[x])
     
     # Run simulation
     total_frames = 1000000
