@@ -33,40 +33,49 @@ ALIGNMENT = 0.1
 SYS_HEIGHT  = 480
 SYS_WIDTH   = 640 * 2
 
-OBJECTS = np.array([[50, 50]]) #object/obstacle can add more if needed
 SPEED_LIMIT = 10
 ######################
 
-#unsure about this change if needed
-class Obstacles(pygame.sprite.Sprite):
-    def __init__(self, objects):
+class Circle(pygame.sprite.Sprite):
+    def __init__(self, x, y, r, color):
         pygame.sprite.Sprite.__init__(self)
-        #self.image = pygame.Surface(objects)
-        self.image = pygame.Surface([objects[0]*2, objects[0]*2])
+        
+        self.x = x
+        self.y = y
+        self.r = r
+        self.color = color
+        
+        self.image = pygame.Surface([2*r, 2*r])
         self.image.fill(BACKGROUND)
-        #pygame.draw.line(self.screen, BLUE, (objects[0], objects[1]), (objects[0]+10, objects[1]+10), 10)
-        pygame.draw.circle(self.image, BLUE, (objects[0], objects[0]), objects[0], objects[0])
+        pygame.draw.circle(self.image, color, (r,r), r, r)
         self.rect = self.image.get_rect()
-        self.r = objects[0]
+
+        
+class Obstacle(Circle):
+    def __init__(self, x, y, r):
+        Circle.__init__(
+            self, 
+            x, 
+            y, 
+            r, 
+            BLUE
+        )
 
 
-
-class Boid(pygame.sprite.Sprite):
+class Boid(Circle):
     def __init__(self, r):
-        # random position
-        self.x = random.uniform(-100, 100)
-        self.y = random.uniform(-100, 100)
+        Circle.__init__(
+            self, 
+            # random position
+            random.uniform(-100, 100), 
+            random.uniform(-100, 100), 
+            r, 
+            RED
+        )
+        
         # random speed
         self.speed_x = random.uniform(-20, -10)
         self.speed_y = random.uniform(-20, -10)
-        
-        # pygame
-        pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.Surface([2*r,2*r])
-        self.image.fill(BACKGROUND)
-        pygame.draw.circle(self.image, RED, (r,r), r, r)
-        self.rect = self.image.get_rect()
-        self.r = r
 
     # RULE 1
     def coherence(self, boids):
@@ -128,8 +137,7 @@ class Boid(pygame.sprite.Sprite):
         
     # RULE 4
     def boundaries(self):
-        # Avoid screen edge
-        
+        # Move away from nearby screen edge
         if self.x + SYS_WIDTH / 2 < BORDER_MARGIN: # left
             self.speed_x += TURN_SPEED
         if SYS_WIDTH / 2 - self.x < BORDER_MARGIN: # right
@@ -149,25 +157,21 @@ class Boid(pygame.sprite.Sprite):
             self.speed_y = self.speed_y / current_speed * SPEED_LIMIT
 
     # RULE 6
-    def avoidObject(self):
-        size = np.shape(OBJECTS)
-        for columns in range(size[0]):
-            #checks if x is too close to the objects x value and if it is reverse its direction
-            if self.x < abs(BORDER_MARGIN + OBJECTS[columns][0]) and self.y < abs(OBJECTS[columns][0] - BORDER_MARGIN):
-                self.speed_x = 0 - self.speed_x
-                self.speed_y = 0 - self.speed_y
-            #checks if y is too close to the objects y value and if it is reverse its direction
-
-
+    def avoidObstacles(self, obstacles):
+        # Move away from nearby obstacles
+        for obstacle in obstacles:
+            if self.is_close_to(obstacle, MIN_DISTANCE*2):
+                self.speed_x += (self.x - obstacle.x) * SEPARATION
+                self.speed_y += (self.y - obstacle.y) * SEPARATION
 
         
-    def update_boid(self, boids):
+    def update_boid(self, boids, obstacles):
         # Apply rules
         self.coherence(boids)
         self.separation(boids)
         self.alignment(boids)
         self.boundaries()
-        #self.avoidObject()
+        self.avoidObstacles(obstacles)
         self.speedlimit()
         
         # Move boid
@@ -175,6 +179,7 @@ class Boid(pygame.sprite.Sprite):
         self.y += self.speed_y
 
     def is_close_to(self, other, distance = VISUAL_RANGE):
+        # Check proximity to object with x and y values
         return abs((self.x - other.x)) < distance and abs((self.y - other.y)) < distance
     
 
@@ -184,6 +189,7 @@ class System:
         self.h = h
         self.w = w
         self.boids = []
+        self.obstacles = []
         self.objects = pygame.sprite.Group()
         self.dt = 1.0
         
@@ -192,15 +198,15 @@ class System:
         self.boids.append(new_boid)
         self.objects.add(new_boid)
 
-    #remove if needed
-    def add_obstacle(self, wall):
-        obstacle = Obstacles(wall)
-        self.objects.add(obstacle)
+    def add_obstacle(self, x, y, r):
+        new_obstacle = Obstacle(x, y, r)
+        self.obstacles.append(new_obstacle)
+        self.objects.add(new_obstacle)
         
     def update_sys(self):
         for boid in self.boids:
             # Update boids
-            boid.update_boid(self.boids)
+            boid.update_boid(self.boids, self.obstacles)
             sx, sy = self.fit_to_screen(boid.x, boid.y)
             
             # Update sprite coordinates
@@ -208,6 +214,10 @@ class System:
             
             # Uncomment to print info
             # print(f'BOID:X{boid.x},Y{boid.y},SX{sx},SY{sy},VX{boid.speed_x},VY{boid.speed_y}')
+        
+        for obstacle in self.obstacles:
+            sx, sy = self.fit_to_screen(obstacle.x, obstacle.y)
+            obstacle.rect.x, obstacle.rect.y = sx-obstacle.r, sy-obstacle.r
         
         self.dt += 1
         self.objects.update()
@@ -255,10 +265,8 @@ def main():
     for i in range(NUM_BOIDS):
         system.add_boid(BOID_RADIUS)
 
-    # Generate obstacles, remove if needed
-    size = np.shape(OBJECTS)
-    for x in range(size[0]):
-        system.add_obstacle(OBJECTS[x])
+    # Generate obstacle
+    system.add_obstacle(-200, 0, BOID_RADIUS * 2)
     
     # Run simulation
     total_frames = 1000000
