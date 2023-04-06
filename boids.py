@@ -1,7 +1,7 @@
 """
 === Pygame Flock Simulation ===
 authors: David Howe, Gerhard Yu
-last-edited: 2023/04/04 - 5:34pm
+last-edited: 2023/04/05 - 9:48pm
 """
 
 import math
@@ -18,23 +18,28 @@ GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 BACKGROUND = BLACK
 
-
-# GLOBAL CONSTANTS
+# CONSTANTS
 ######################
 MIN_DISTANCE = 20
 VISUAL_RANGE = 105
 BORDER_MARGIN = 70
 TURN_SPEED = 2
 
-COHERENCE = 0.01
+COHERENCE = 0.005
 SEPARATION = 0.05
-ALIGNMENT = 0.1
+ALIGNMENT = 0.05
 
 SYS_HEIGHT  = 480
 SYS_WIDTH   = 640 * 2
 
 SPEED_LIMIT = 10
 ######################
+
+########################
+NUM_BOIDS   = 50
+NUM_ROGUES  = 2
+BOID_RADIUS = 6
+########################
 
 class Circle(pygame.sprite.Sprite):
     def __init__(self, x, y, r, color):
@@ -63,19 +68,20 @@ class Obstacle(Circle):
 
 
 class Boid(Circle):
-    def __init__(self, r):
+    def __init__(self, r, color, set_state=True):
         Circle.__init__(
             self, 
             # random position
             random.uniform(-100, 100), 
             random.uniform(-100, 100), 
             r, 
-            RED
+            color
         )
         
-        # random speed
-        self.speed_x = random.uniform(-20, -10)
-        self.speed_y = random.uniform(-20, -10)
+        if set_state:
+            # random speed
+            self.speed_x = random.uniform(-20, -10)
+            self.speed_y = random.uniform(-20, -10)
 
     # RULE 1
     def coherence(self, boids):
@@ -132,8 +138,8 @@ class Boid(Circle):
         c_y = velocity_y / nearby_boid_count
         
         # Align with group
-        boid.speed_x += (c_x - boid.speed_x) * ALIGNMENT
-        boid.speed_y += (c_y - boid.speed_y) * ALIGNMENT
+        self.speed_x += (c_x - self.speed_x) * ALIGNMENT
+        self.speed_y += (c_y - self.speed_y) * ALIGNMENT
         
     # RULE 4
     def boundaries(self):
@@ -183,7 +189,34 @@ class Boid(Circle):
         return abs((self.x - other.x)) < distance and abs((self.y - other.y)) < distance
     
 
+class Rogue_Boid(Boid):
+    def __init__(self, r):
+        Boid.__init__(self, r, GREEN)
+        
+        self.x = random.uniform(200, 300)
+        self.y = random.uniform(-100, 100)
+        
+        v = 30
+        angle = random.uniform(0,2*math.pi)
+        self.speed_x = v * math.cos(angle)
+        self.speed_y = v * math.sin(angle)
+        
+    
+    def alignment(self, boids):
+        return
+        
+    def update_boid(self, boids, obstacles):
+        # Apply rules
+        self.boundaries()
+        self.avoidObstacles(obstacles)
+        self.speedlimit()
+    
+        # Move boid
+        self.x += self.speed_x
+        self.y += self.speed_y
 
+        
+        
 class System:
     def __init__(self, h, w):
         self.h = h
@@ -194,10 +227,15 @@ class System:
         self.dt = 1.0
         
     def add_boid(self, r):
-        new_boid = Boid(r)
+        new_boid = Boid(r, RED)
         self.boids.append(new_boid)
         self.objects.add(new_boid)
 
+    def add_rogue_boid(self, r):
+        new_rogue = Rogue_Boid(r)
+        self.boids.append(new_rogue)
+        self.objects.add(new_rogue)
+        
     def add_obstacle(self, x, y, r):
         new_obstacle = Obstacle(x, y, r)
         self.obstacles.append(new_obstacle)
@@ -207,28 +245,24 @@ class System:
         for boid in self.boids:
             # Update boids
             boid.update_boid(self.boids, self.obstacles)
-            sx, sy = self.fit_to_screen(boid.x, boid.y)
-            
-            # Update sprite coordinates
-            boid.rect.x, boid.rect.y = sx-boid.r, sy-boid.r
+            boid.rect.x, boid.rect.y = self.fit_to_screen(boid.x, boid.y, boid.r)
             
             # Uncomment to print info
             # print(f'BOID:X{boid.x},Y{boid.y},SX{sx},SY{sy},VX{boid.speed_x},VY{boid.speed_y}')
         
         for obstacle in self.obstacles:
-            sx, sy = self.fit_to_screen(obstacle.x, obstacle.y)
-            obstacle.rect.x, obstacle.rect.y = sx-obstacle.r, sy-obstacle.r
+            obstacle.rect.x, obstacle.rect.y = self.fit_to_screen(obstacle.x, obstacle.y, obstacle.r)
         
         self.dt += 1
         self.objects.update()
             
-    def fit_to_screen(self, x, y):
+    def fit_to_screen(self, x, y, r):
         # !!! This function could also be used 
         # !!! to scale if needed
         
         # Moves 0,0 to centre of screen
-        sx = int(x + self.w/2)
-        sy = int(y + self.h/2)
+        sx = int(x + self.w/2) - r
+        sy = int(y + self.h/2) - r 
         return sx, sy
     
     def draw(self, screen):
@@ -238,11 +272,6 @@ class System:
         
 
 def main():
-    # LOCAL CONSTANTS
-    ########################
-    NUM_BOIDS   = 50
-    BOID_RADIUS = 10
-    ########################
     
     # Initializing pygame
     print ('Flock Simulation')
@@ -265,8 +294,12 @@ def main():
     for i in range(NUM_BOIDS):
         system.add_boid(BOID_RADIUS)
 
+    # Generate rogue boids
+    for i in range(NUM_ROGUES):
+        system.add_rogue_boid(BOID_RADIUS)
+        
     # Generate obstacle
-    system.add_obstacle(-200, 0, BOID_RADIUS * 2)
+    system.add_obstacle(-200, 0, BOID_RADIUS * 3)
     
     # Run simulation
     total_frames = 1000000
