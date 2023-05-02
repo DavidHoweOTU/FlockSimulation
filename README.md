@@ -13,7 +13,7 @@ The flock of birds mostly follow a simple set of rules
 * Moving away from nearby birds to ensure no collision/bumping occurs.
 * Finding average velocity of the birds to ensure other birds don't go too fast or too slow when compared to its fellow flockmates.
 * Avoiding the edges of the screen.
-* Capping the speed limit of the birds to ensure they don't go too fast.
+* Capping the speed limit of the birds to ensure birds don't go too fast.
 
 Other functionalities included
 * Avoiding obstacles present in the screen.
